@@ -1,0 +1,251 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[46]:
+
+
+import pandas as pd
+
+def read_worldbank_data(filename):
+    data = pd.read_csv(filename, skiprows=4)
+    data = data.drop(columns=['Country Code', 'Indicator Name', 'Indicator Code', 'Unnamed: 66'])
+
+    # DataFrame with years as columns
+    years_columns_df = data.melt(id_vars=['Country Name'], var_name='Year', value_name='Value')
+    years_columns_df['Year'] = years_columns_df['Year'].astype(int)
+
+    # DataFrame with countries as columns
+    countries_columns_df = data.set_index('Country Name').transpose()
+    countries_columns_df.index.name = 'Year'
+    countries_columns_df.reset_index(inplace=True)
+    countries_columns_df['Year'] = countries_columns_df['Year'].astype(int)
+
+    return years_columns_df, countries_columns_df
+
+# Example: Read CO2 emissions data and create DataFrames
+years_columns_df, countries_columns_df = read_worldbank_data('co2_emissions.csv')
+
+
+# In[47]:
+
+
+# Explore statistical properties
+print("Statistical summary of CO2 emissions:")
+print(years_columns_df['Value'].describe())
+
+print("\nCorrelation between CO2 emissions for Germany and France:")
+print(countries_columns_df[['Germany', 'France']].corr())
+
+print("\nMean CO2 emissions for a few countries:")
+print(countries_columns_df[['United States', 'China', 'India', 'Brazil']].mean())
+
+
+# In[48]:
+
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(12, 6))
+countries_columns_df.plot(x='Year', y=['United States', 'China', 'India', 'Brazil'], kind='line', marker='o', figsize=(12, 6))
+plt.title('CO2 Emissions for Selected Countries')
+plt.xlabel('Year')
+plt.ylabel('CO2 Emissions (kt)')
+plt.legend(title='Country')
+plt.show()
+
+
+# In[25]:
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Data Preparation and Descriptive Statistics
+indicators = {
+    'co2_emissions': 'EN.ATM.CO2E.SF.KT',
+    'gdp_per_capita': 'NY.GDP.PCAP.CD',
+    'urban_population': 'SP.URB.TOTL.IN.ZS',
+    'forest_area': 'AG.LND.FRST.ZS'
+}
+
+regions = [
+    'East Asia & Pacific',
+    'Europe & Central Asia',
+    'Latin America & the Caribbean',
+    'Middle East & North Africa',
+    'North America',
+    'South Asia',
+    'Sub-Saharan Africa'
+]
+
+
+# In[26]:
+
+
+def read_and_process_indicator(indicator_code, csv_file):
+    data = pd.read_csv(csv_file, skiprows=4)
+    data = data[data['Indicator Code'] == indicator_code]  # Filter data by the indicator code
+    data = data.melt(id_vars=['Country Name', 'Country Code', 'Indicator Name', 'Indicator Code'],
+                     var_name='Year', value_name=indicator_code)  # Melt the DataFrame
+    data = data[data['Country Name'].isin(regions)]
+    data = data.drop(columns=['Indicator Name', 'Indicator Code']).set_index(['Country Code', 'Year'])
+    data['Region'] = data['Country Name']
+    return data.drop(columns=['Country Name'])
+
+
+# In[27]:
+
+
+data_frames = []
+for indicator, code in indicators.items():
+    file_path = 'HERTS NEW DATA\\' + indicator + '.csv'
+    data_frames.append(read_and_process_indicator(code, file_path))
+
+# Merge data
+merged_data = pd.concat(data_frames, axis=0).reset_index()
+
+# Pivot the dataset to wide format
+wide_data = merged_data.pivot_table(values=['EN.ATM.CO2E.SF.KT', 'NY.GDP.PCAP.CD', 'SP.URB.TOTL.IN.ZS', 'AG.LND.FRST.ZS'], 
+                                    index=['Country Code', 'Region', 'Year']).reset_index()
+
+
+# In[28]:
+
+
+merged_data
+
+
+# In[29]:
+
+
+print(merged_data.head())
+print(merged_data.columns)
+
+
+# In[30]:
+
+
+print(merged_data.describe())
+
+
+# In[31]:
+
+
+# Visualization 1: CO2 emissions vs. GDP per capita
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=wide_data, x='NY.GDP.PCAP.CD', y='EN.ATM.CO2E.SF.KT', hue='Region')
+plt.title('CO2 Emissions vs. GDP per Capita across Regions')
+plt.xlabel('GDP per Capita')
+plt.ylabel('CO2 Emissions (kt)')
+plt.show()
+
+
+# In[34]:
+
+
+# Visualization 3: Urban population percentage over time
+plt.figure(figsize=(30, 30))
+sns.lineplot(data=wide_data, x='Year', y='SP.URB.TOTL.IN.ZS', hue='Region')
+plt.title('Urban Population Percentage over Time across Regions')
+plt.xlabel('Year')
+plt.ylabel('Urban Population (%)')
+plt.show()
+
+
+# In[35]:
+
+
+# Aggregate CO2 emissions by region and year
+co2_by_region_year = wide_data.groupby(['Region', 'Year'])['EN.ATM.CO2E.SF.KT'].sum().unstack().transpose()
+
+# Create a stacked bar plot
+plt.figure(figsize=(12, 6))
+co2_by_region_year.plot(kind='bar', stacked=True, figsize=(12, 6))
+plt.title('CO2 Emissions by Region and Year')
+plt.xlabel('Year')
+plt.ylabel('CO2 Emissions (kt)')
+plt.legend(title='Region', bbox_to_anchor=(1, 1), loc='upper left')
+plt.show()
+
+
+# In[36]:
+
+
+co2_by_region = wide_data.groupby('Region')['EN.ATM.CO2E.SF.KT'].mean()
+plt.figure(figsize=(10, 6))
+co2_by_region.plot(kind='bar')
+plt.title('Average CO2 Emissions by Region')
+plt.xlabel('Region')
+plt.ylabel('CO2 Emissions (kt)')
+plt.show()
+
+
+# In[39]:
+
+
+plt.figure(figsize=(12, 12))
+sns.boxplot(data=wide_data, x='Region', y='SP.URB.TOTL.IN.ZS', hue='Region', dodge=False)
+plt.title('Urban Population Percentage by Region')
+plt.xlabel('Region')
+plt.ylabel('Urban Population (%)')
+plt.legend().remove()
+plt.show()
+
+
+# In[40]:
+
+
+forest_by_region = wide_data.groupby('Region')['AG.LND.FRST.ZS'].mean()
+plt.figure(figsize=(10, 6))
+forest_by_region.plot(kind='bar', secondary_y=True, alpha=0.5)
+co2_by_region.plot(kind='bar', color='red', alpha=0.5)
+plt.title('Average CO2 Emissions and Forest Area by Region')
+plt.xlabel('Region')
+plt.ylabel('CO2 Emissions (kt) and Forest Area (%)')
+plt.show()
+
+
+# In[41]:
+
+
+co2_heatmap_data = wide_data.pivot_table(values='EN.ATM.CO2E.SF.KT', index='Year', columns='Region')
+plt.figure(figsize=(10, 6))
+sns.heatmap(co2_heatmap_data, cmap='coolwarm', annot=False, cbar_kws={'label': 'CO2 Emissions (kt)'})
+plt.title('CO2 Emissions over Time by Region')
+plt.xlabel('Region')
+plt.ylabel('Year')
+plt.show()
+
+
+# In[43]:
+
+
+co2_by_region_year = wide_data.groupby(['Region', 'Year'])['EN.ATM.CO2E.SF.KT'].sum().unstack().transpose()
+
+plt.figure(figsize=(12, 6))
+co2_by_region_year.plot(kind='area', stacked=True, alpha=0.7, figsize=(12, 6))
+plt.title('CO2 Emissions by Region and Year (Stacked Area Plot)')
+plt.xlabel('Year')
+plt.ylabel('CO2 Emissions (kt)')
+plt.legend(title='Region', bbox_to_anchor=(1, 1), loc='upper left')
+plt.show()
+
+
+# In[45]:
+
+
+plt.figure(figsize=(10, 6))
+plt.hexbin(wide_data['NY.GDP.PCAP.CD'], wide_data['EN.ATM.CO2E.SF.KT'], gridsize=20, cmap='viridis')
+plt.title('CO2 Emissions vs. GDP per Capita (Hexbin Plot)')
+plt.xlabel('GDP per Capita (current US$)')
+plt.ylabel('CO2 Emissions (kt)')
+plt.colorbar(label='Counts in Bin')
+plt.show()
+
+
+# In[ ]:
+
+
+
+
